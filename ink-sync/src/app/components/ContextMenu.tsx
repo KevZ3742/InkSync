@@ -19,6 +19,7 @@ interface ContextMenuProps {
 }
 
 type AIState = 'menu' | 'input' | 'generating';
+type MicState = 'idle' | 'listening' | 'transcribing' | 'error';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,47 @@ function flipElement(el: DrawElement, axis: 'h' | 'v', cx: number, cy: number): 
   }
 }
 
+// ── Mic icon ──────────────────────────────────────────────────────────────────
+
+function MicIcon({ state }: { state: MicState }) {
+  if (state === 'listening') {
+    // Animated waveform bars while recording
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <style>{`
+          @keyframes micBar1 { 0%,100%{height:3px;y:5.5px} 50%{height:8px;y:3px} }
+          @keyframes micBar2 { 0%,100%{height:6px;y:4px} 50%{height:10px;y:2px} }
+          @keyframes micBar3 { 0%,100%{height:4px;y:5px} 50%{height:7px;y:3.5px} }
+        `}</style>
+        <rect x="2" y="5.5" width="2" height="3" rx="1" fill="currentColor"
+          style={{ animation: 'micBar1 0.6s ease infinite' }} />
+        <rect x="6" y="4" width="2" height="6" rx="1" fill="currentColor"
+          style={{ animation: 'micBar2 0.6s ease infinite 0.1s' }} />
+        <rect x="10" y="5" width="2" height="4" rx="1" fill="currentColor"
+          style={{ animation: 'micBar3 0.6s ease infinite 0.2s' }} />
+      </svg>
+    );
+  }
+  if (state === 'transcribing') {
+    // Spinning arc while waiting for Gemini
+    return (
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+        style={{ animation: 'spin 0.8s linear infinite' }}>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.5"
+          strokeLinecap="round" strokeDasharray="20 12" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <rect x="4.5" y="1" width="4" height="7" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+      <path d="M2 6.5A4.5 4.5 0 0 0 11 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="6.5" y1="11" x2="6.5" y2="9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function ContextMenu({
@@ -72,15 +114,39 @@ export default function ContextMenu({
   const [aiState, setAIState] = useState<AIState>('menu');
   const [prompt, setPrompt] = useState('');
   const [aiError, setAIError] = useState('');
+  const [micState, setMicState] = useState<MicState>('idle');
+  const [micSupported, setMicSupported] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const generatedRef = useRef<DrawElement[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   const idCounterRef = useRef(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Check MediaRecorder + getUserMedia support (works in LibreWolf/Firefox)
+  useEffect(() => {
+    const supported = !!(
+      typeof navigator !== 'undefined' &&
+      typeof navigator.mediaDevices.getUserMedia === 'function' &&
+      typeof MediaRecorder !== 'undefined'
+    );
+    setMicSupported(supported);
+  }, []);
 
   useEffect(() => {
     if (aiState === 'input') setTimeout(() => inputRef.current?.focus(), 30);
   }, [aiState]);
+
+  // Cleanup on unmount — stop any active recording
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   const cancelRef = useRef(() => {});
   useEffect(() => {
@@ -96,12 +162,88 @@ export default function ContextMenu({
     };
   }, []);
 
-  const menuWidth = 230;
-  const menuMaxHeight = 220;
+  const menuWidth = 280;
+  const menuMaxHeight = 260;
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
   const posX = x + menuWidth > vw ? x - menuWidth : x;
   const posY = y + menuMaxHeight > vh ? y - menuMaxHeight : y;
+
+  // ── Voice input (MediaRecorder → Gemini transcription) ────────────────────
+
+  const handleMicToggle = useCallback(async () => {
+    if (!micSupported) return;
+
+    // Stop if already recording
+    if (micState === 'listening') {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    if (micState === 'transcribing') return;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Pick best supported mime type
+      const mimeType = ['audio/webm', 'audio/ogg', 'audio/mp4']
+        .find(t => MediaRecorder.isTypeSupported(t)) ?? '';
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setMicState('transcribing');
+
+        try {
+          const audioBlob = new Blob(audioChunksRef.current, {
+            type: mimeType || 'audio/webm',
+          });
+
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(audioBlob);
+          });
+
+          const res = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio: base64, mimeType: mimeType || 'audio/webm' }),
+          });
+
+          if (!res.ok) throw new Error('Transcription failed');
+          const { text } = await res.json();
+
+          if (text?.trim()) {
+            setPrompt(prev =>
+              prev.trim() ? `${prev.trimEnd()} ${text.trim()}` : text.trim()
+            );
+          }
+          setMicState('idle');
+          setTimeout(() => inputRef.current?.focus(), 50);
+        } catch (err) {
+          console.error('Transcription error:', err);
+          setMicState('error');
+          setTimeout(() => setMicState('idle'), 3000);
+        }
+      };
+
+      recorder.start();
+      setMicState('listening');
+    } catch (err) {
+      console.error('Mic access error:', err);
+      setMicState('error');
+      setTimeout(() => setMicState('idle'), 3000);
+    }
+  }, [micSupported, micState]);
 
   // ── Selection actions ─────────────────────────────────────────────────────
 
@@ -140,12 +282,21 @@ export default function ContextMenu({
   }, [currentElements, onElementsGenerated, onClose]);
 
   cancelRef.current = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setMicState('idle');
+    }
     if (aiState === 'generating') handleAIStop(true);
     else onClose();
   };
 
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
+    // Stop any active recording before generating
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setMicState('idle');
+    }
     setAIError('');
     setAIState('generating');
     generatedRef.current = [];
@@ -222,6 +373,20 @@ export default function ContextMenu({
     border: bg === 'var(--chalk)' ? '1px solid var(--canvas-grid)' : 'none',
   });
 
+  // Mic button color/style based on state
+  const micColor = micState === 'listening'    ? '#FF6B6B'
+    : micState === 'transcribing' ? 'var(--accent)'
+    : micState === 'error'        ? '#FF6B6B'
+    : 'var(--muted)';
+
+  const micBorderColor = micState === 'listening'    ? '#FF6B6B'
+    : micState === 'transcribing' ? 'var(--accent)'
+    : 'var(--canvas-grid)';
+
+  const micBg = micState === 'listening'    ? 'rgba(255,107,107,0.1)'
+    : micState === 'transcribing' ? 'var(--accent-glow)'
+    : 'var(--chalk)';
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -249,8 +414,13 @@ export default function ContextMenu({
           0%, 100% { box-shadow: 0 0 0 0 var(--accent-glow); border-color: var(--accent); }
           50%       { box-shadow: 0 0 0 3px var(--accent-glow); border-color: var(--accent); }
         }
+        @keyframes micPulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,107,0.3); }
+          50%       { box-shadow: 0 0 0 4px rgba(255,107,107,0.15); }
+        }
         .ctx-item:hover { background: var(--chalk) !important; }
         .ctx-danger:hover { background: rgba(255,107,107,0.08) !important; }
+        .mic-btn:hover { border-color: var(--accent) !important; color: var(--accent) !important; }
       `}</style>
 
       {/* ══ SELECTION — menu ══ */}
@@ -331,6 +501,7 @@ export default function ContextMenu({
       {/* ══ AI — input ══ */}
       {mode === 'ai' && aiState === 'input' && (
         <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Header */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             paddingBottom: 8, borderBottom: '1px solid var(--canvas-grid)',
@@ -339,25 +510,94 @@ export default function ContextMenu({
             <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--ink)' }}>Draw with AI</span>
           </div>
 
-          <input
-            ref={inputRef}
-            value={prompt}
-            onChange={e => { setPrompt(e.target.value); setAIError(''); }}
-            onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); if (e.key === 'Escape') onClose(); }}
-            placeholder="a simple flow chart..."
-            style={{
-              background: 'var(--chalk)', border: '1.5px solid var(--canvas-grid)',
-              borderRadius: 8, padding: '7px 10px',
-              fontFamily: 'DM Mono, monospace', fontSize: 12,
-              color: 'var(--ink)', outline: 'none', width: '100%',
-              transition: 'border-color 0.15s',
-            }}
-            onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
-            onBlur={e => (e.target.style.borderColor = 'var(--canvas-grid)')}
-          />
+          {/* Input row with mic button */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'stretch' }}>
+            <input
+              ref={inputRef}
+              value={prompt}
+              onChange={e => { setPrompt(e.target.value); setAIError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleGenerate(); if (e.key === 'Escape') onClose(); }}
+              placeholder={
+                micState === 'listening'    ? 'Listening...' :
+                micState === 'transcribing' ? 'Transcribing...' :
+                'a simple flow chart...'
+              }
+              style={{
+                flex: 1,
+                background: micState === 'listening' ? 'rgba(255,107,107,0.04)'
+                  : micState === 'transcribing' ? 'var(--accent-glow)'
+                  : 'var(--chalk)',
+                border: `1.5px solid ${
+                  micState === 'listening'    ? 'rgba(255,107,107,0.5)' :
+                  micState === 'transcribing' ? 'var(--accent)' :
+                  'var(--canvas-grid)'
+                }`,
+                borderRadius: 8, padding: '7px 10px',
+                fontFamily: 'DM Mono, monospace', fontSize: 12,
+                color: 'var(--ink)', outline: 'none',
+                transition: 'border-color 0.15s, background 0.15s',
+                minWidth: 0,
+              }}
+              onFocus={e => {
+                if (micState === 'idle') e.target.style.borderColor = 'var(--accent)';
+              }}
+              onBlur={e => {
+                if (micState === 'idle') e.target.style.borderColor = 'var(--canvas-grid)';
+              }}
+            />
+
+            {/* Mic button — always visible, grayed out if unsupported */}
+            <button
+              className={micState === 'idle' && micSupported ? 'mic-btn' : ''}
+              onClick={micSupported && micState !== 'transcribing' ? handleMicToggle : undefined}
+              title={
+                !micSupported                ? 'Voice input unavailable — microphone access not supported in this browser' :
+                micState === 'listening'     ? 'Stop recording' :
+                micState === 'transcribing'  ? 'Transcribing your audio...' :
+                micState === 'error'         ? 'Microphone error — click to retry' :
+                'Speak your prompt (voice to text)'
+              }
+              style={{
+                width: 34, height: 34, borderRadius: 8,
+                border: `1.5px solid ${micSupported ? micBorderColor : 'var(--canvas-grid)'}`,
+                background: micSupported ? micBg : 'var(--chalk)',
+                color: micSupported ? micColor : 'var(--muted)',
+                cursor: micSupported && micState !== 'transcribing' ? 'pointer' : 'default',
+                flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.15s',
+                opacity: micSupported ? 1 : 0.35,
+                animation: micState === 'listening' ? 'micPulse 1.2s ease infinite' : 'none',
+              }}
+            >
+              <MicIcon state={micState} />
+            </button>
+          </div>
+
+          {/* Mic status hint */}
+          {micState === 'listening' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: '#FF6B6B' }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF6B6B',
+                animation: 'pulseDot 1.2s ease infinite' }} />
+              Recording… tap mic to stop
+            </div>
+          )}
+          {micState === 'transcribing' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--accent)' }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)',
+                animation: 'pulseDot 0.8s ease infinite' }} />
+              Transcribing…
+            </div>
+          )}
+          {micState === 'error' && (
+            <div style={{ fontSize: 10, color: 'var(--danger)' }}>
+              Mic error — check browser permissions
+            </div>
+          )}
 
           {aiError && <div style={{ fontSize: 10, color: 'var(--danger)', paddingLeft: 2 }}>{aiError}</div>}
 
+          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 6 }}>
             <button
               onClick={handleGenerate}

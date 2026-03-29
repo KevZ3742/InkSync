@@ -89,7 +89,7 @@ Anchor all elements near this origin. Return only the JSON array.`;
     async start(controller) {
       try {
         const model = genAI.getGenerativeModel({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           systemInstruction: SYSTEM_PROMPT,
         });
 
