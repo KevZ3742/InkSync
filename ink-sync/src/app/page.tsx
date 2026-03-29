@@ -26,10 +26,10 @@ type Tool = 'select' | 'pan' | 'pen' | 'line' | 'arrow' | 'rect' | 'ellipse' | '
 
 const USER_ID = typeof window !== 'undefined'
   ? (sessionStorage.getItem('ink-sync-uid') || (() => {
-      const id = uuidv4();
-      sessionStorage.setItem('ink-sync-uid', id);
-      return id;
-    })())
+    const id = uuidv4();
+    sessionStorage.setItem('ink-sync-uid', id);
+    return id;
+  })())
   : uuidv4();
 
 interface ContextMenuState {
@@ -325,14 +325,14 @@ export default function Page() {
       }
       if (mod) {
         if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); return; }
-        if (e.key === 'z' && e.shiftKey)  { e.preventDefault(); handleRedo(); return; }
-        if (e.key === 'y')                 { e.preventDefault(); handleRedo(); return; }
-        if (e.key === 'c')                 { e.preventDefault(); handleCopy(); return; }
-        if (e.key === 'v')                 { e.preventDefault(); handlePaste(); return; }
-        if (e.key === 'd')                 { e.preventDefault(); handleDuplicate(); return; }
+        if (e.key === 'z' && e.shiftKey) { e.preventDefault(); handleRedo(); return; }
+        if (e.key === 'y') { e.preventDefault(); handleRedo(); return; }
+        if (e.key === 'c') { e.preventDefault(); handleCopy(); return; }
+        if (e.key === 'v') { e.preventDefault(); handlePaste(); return; }
+        if (e.key === 'd') { e.preventDefault(); handleDuplicate(); return; }
         if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn(); return; }
-        if (e.key === '-')                   { e.preventDefault(); handleZoomOut(); return; }
-        if (e.key === '0')                   { e.preventDefault(); handleZoomReset(); return; }
+        if (e.key === '-') { e.preventDefault(); handleZoomOut(); return; }
+        if (e.key === '0') { e.preventDefault(); handleZoomReset(); return; }
       }
     };
     window.addEventListener('keydown', handler);
@@ -347,8 +347,8 @@ export default function Page() {
         <button className="theme-toggle" onClick={handleToggleTheme} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           style={{ position: 'fixed', top: 20, right: 20, zIndex: 100 }}>
           {isDark
-            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>
+            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
           }
         </button>
         <Landing onJoin={(roomCode, userName) => setSession({ roomCode, userName })} />
@@ -388,8 +388,8 @@ export default function Page() {
           onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--canvas-grid)'; e.currentTarget.style.color = 'var(--muted)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)'; }}
         >
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-            <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.3"/>
-            <path d="M4.5 3.5v4l3-2-3-2z" fill="currentColor"/>
+            <circle cx="5.5" cy="5.5" r="4.5" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M4.5 3.5v4l3-2-3-2z" fill="currentColor" />
           </svg>
           replay · {replayLogLen} strokes
         </button>
@@ -397,13 +397,13 @@ export default function Page() {
 
       <DrawingCanvas
         elements={isReplaying ? replayElements : elements}
-        onElementsChange={isReplaying ? () => {} : handleElementsChange}
-        onElementsSilentUpdate={isReplaying ? () => {} : handleElementsSilentUpdate}
+        onElementsChange={isReplaying ? () => { } : handleElementsChange}
+        onElementsSilentUpdate={isReplaying ? () => { } : handleElementsSilentUpdate}
         activeTool={isReplaying ? 'pan' : activeTool}
         activeColor={activeColor} strokeWidth={strokeWidth}
         remoteCursors={isReplaying ? [] : remoteCursors}
-        onCursorMove={isReplaying ? () => {} : sendCursorMove}
-        onCursorLeave={isReplaying ? () => {} : sendCursorLeave}
+        onCursorMove={isReplaying ? () => { } : sendCursorMove}
+        onCursorLeave={isReplaying ? () => { } : sendCursorLeave}
         onSelectionChange={handleSelectionChange}
         onPanOffsetChange={(x, y) => { panOffsetRef.current = { x, y }; setCurrentPan({ x, y }); }}
         onScaleChange={(s) => { scaleRef.current = s; setCurrentScale(s); }}
@@ -483,7 +483,7 @@ export default function Page() {
 
       {session && !isReplaying && (
         <div key={smartShapeEnabled ? 'on' : 'off'} style={{
-          position: 'fixed', bottom: 160, left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', top: 86, right: 20,
           background: 'var(--accent)', color: 'white', fontSize: 11, padding: '5px 14px',
           borderRadius: 100, fontFamily: 'DM Mono, monospace', pointerEvents: 'none',
           zIndex: 200, animation: 'toastIn 2s ease forwards', whiteSpace: 'nowrap',
@@ -493,18 +493,18 @@ export default function Page() {
       )}
 
       {session && !connected && !isReplaying && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pill animate-fade-in"
-          style={{ background: 'var(--danger)', color: 'white', fontSize: 11 }}>
+        <div className="absolute z-20 pill animate-fade-in"
+          style={{ top: 86, left: 20, background: 'var(--danger)', color: 'white', fontSize: 11 }}>
           <span>●</span> Connecting...
         </div>
       )}
 
       <style>{`
         @keyframes toastIn {
-          0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
-          15%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-          70%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-          100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+          0%   { opacity: 0; transform: translateY(-6px); }
+          15%  { opacity: 1; transform: translateY(0); }
+          70%  { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-4px); }
         }
       `}</style>
     </div>
