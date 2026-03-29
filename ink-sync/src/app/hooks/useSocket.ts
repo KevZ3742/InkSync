@@ -35,6 +35,10 @@ function dedupe(users: User[]): User[] {
   return Array.from(new Map(users.map(u => [u.id, u])).values());
 }
 
+// Point this at your Render backend URL.
+// In production, set NEXT_PUBLIC_SOCKET_URL in your Vercel environment variables.
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+
 export function useSocket(
   roomCode: string | null,
   userName: string | null,
@@ -60,7 +64,10 @@ export function useSocket(
       socketRef.current = null;
     }
 
-    const socket = io({ transports: ['websocket'] });
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'], // polling as fallback
+      withCredentials: true,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {
