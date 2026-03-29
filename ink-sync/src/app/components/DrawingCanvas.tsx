@@ -388,7 +388,6 @@ export default function DrawingCanvas({
     const container = containerRef.current;
     if (!container) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = container.getBoundingClientRect();
       const cx = e.clientX - rect.left;

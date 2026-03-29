@@ -209,9 +209,58 @@ export default function Minimap({
 
   const handleMouseUp = useCallback(() => setIsDragging(false), []);
 
-  // ── Zoom display ──────────────────────────────────────────────────────────
   const pct = Math.round(scale * 100);
   const atOne = Math.abs(scale - 1) < 0.01;
+
+  // ── Collapsed pill ────────────────────────────────────────────────────────
+
+  if (isCollapsed) {
+    return (
+      <button
+        onClick={() => setIsCollapsed(false)}
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          left: 24,
+          zIndex: 100,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 16px',
+          background: 'var(--paper)',
+          border: '1.5px solid var(--canvas-grid)',
+          borderRadius: 100,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          cursor: 'pointer',
+          fontFamily: 'DM Mono, monospace',
+          transition: 'all 0.15s',
+          color: 'var(--ink)',
+          animation: 'slideUp 0.3s ease forwards',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.borderColor = 'var(--accent)';
+          e.currentTarget.style.boxShadow = '0 4px 24px rgba(108,99,255,0.15)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.borderColor = 'var(--canvas-grid)';
+          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.1)';
+        }}
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+          <rect x="0.75" y="0.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="6.75" y="0.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="0.75" y="6.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+          <rect x="6.75" y="6.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
+        </svg>
+        <span style={{ fontSize: 12, fontWeight: 500 }}>minimap</span>
+        <span style={{ fontSize: 11, color: atOne ? 'var(--muted)' : 'var(--accent)', fontWeight: atOne ? 400 : 600 }}>
+          {pct}%
+        </span>
+      </button>
+    );
+  }
+
+  // ── Full panel ────────────────────────────────────────────────────────────
 
   const zoomBtnBase: React.CSSProperties = {
     display: 'flex',
@@ -228,8 +277,6 @@ export default function Minimap({
     borderRadius: 0,
   };
 
-  // ── JSX ───────────────────────────────────────────────────────────────────
-
   return (
     <div
       style={{
@@ -245,9 +292,8 @@ export default function Minimap({
         width: MINIMAP_W,
       }}
     >
-      {/* Header */}
+      {/* Header with minimize button */}
       <div
-        onClick={() => setIsCollapsed(c => !c)}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -256,12 +302,8 @@ export default function Minimap({
           background: 'var(--paper)',
           border: '1.5px solid var(--canvas-grid)',
           borderRadius: '10px 10px 0 0',
-          cursor: 'pointer',
-          transition: 'border-color 0.15s',
           userSelect: 'none',
         }}
-        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--canvas-grid)'; }}
       >
         <svg width="11" height="11" viewBox="0 0 11 11" fill="none" style={{ color: 'var(--accent)', flexShrink: 0 }}>
           <rect x="0.75" y="0.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
@@ -270,57 +312,76 @@ export default function Minimap({
           <rect x="6.75" y="6.75" width="3.5" height="3.5" rx="0.5" stroke="currentColor" strokeWidth="1.2"/>
         </svg>
         <span style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--muted)', flex: 1 }}>MINIMAP</span>
-        <svg
-          width="10" height="10" viewBox="0 0 10 10" fill="none"
-          style={{ color: 'var(--muted)', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        <button
+          onClick={() => setIsCollapsed(true)}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: 'var(--muted)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 16,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'var(--chalk)';
+            e.currentTarget.style.color = 'var(--ink)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'var(--muted)';
+          }}
         >
-          <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+          −
+        </button>
       </div>
 
       {/* Minimap canvas */}
-      {!isCollapsed && (
-        <div style={{
-          width: MINIMAP_W,
-          height: MINIMAP_H,
-          background: 'var(--paper)',
-          border: '1.5px solid var(--canvas-grid)',
-          borderTop: 'none',
-          overflow: 'hidden',
-          cursor: isDragging ? 'grabbing' : 'crosshair',
-          position: 'relative',
-        }}>
-          <canvas
-            ref={canvasRef}
-            width={MINIMAP_W}
-            height={MINIMAP_H}
-            style={{ display: 'block', width: MINIMAP_W, height: MINIMAP_H }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          />
-          {elements.length > 0 && (
-            <div style={{
-              position: 'absolute', bottom: 4, right: 5,
-              fontSize: 9, color: 'var(--muted)', pointerEvents: 'none', letterSpacing: '0.05em',
-            }}>
-              {elements.length} el
-            </div>
-          )}
-          {elements.length === 0 && (
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              pointerEvents: 'none',
-            }}>
-              <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.45 }}>empty canvas</span>
-            </div>
-          )}
-        </div>
-      )}
+      <div style={{
+        width: MINIMAP_W,
+        height: MINIMAP_H,
+        background: 'var(--paper)',
+        border: '1.5px solid var(--canvas-grid)',
+        borderTop: 'none',
+        overflow: 'hidden',
+        cursor: isDragging ? 'grabbing' : 'crosshair',
+        position: 'relative',
+      }}>
+        <canvas
+          ref={canvasRef}
+          width={MINIMAP_W}
+          height={MINIMAP_H}
+          style={{ display: 'block', width: MINIMAP_W, height: MINIMAP_H }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        />
+        {elements.length > 0 && (
+          <div style={{
+            position: 'absolute', bottom: 4, right: 5,
+            fontSize: 9, color: 'var(--muted)', pointerEvents: 'none', letterSpacing: '0.05em',
+          }}>
+            {elements.length} el
+          </div>
+        )}
+        {elements.length === 0 && (
+          <div style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+          }}>
+            <span style={{ fontSize: 10, color: 'var(--muted)', opacity: 0.45 }}>empty canvas</span>
+          </div>
+        )}
+      </div>
 
-      {/* Zoom bar — always visible, fused to bottom */}
+      {/* Zoom bar */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
@@ -330,7 +391,6 @@ export default function Minimap({
         borderRadius: '0 0 10px 10px',
         overflow: 'hidden',
       }}>
-        {/* Zoom out */}
         <button
           onClick={e => { e.stopPropagation(); onZoomOut(); }}
           disabled={scale <= 0.1}
@@ -350,7 +410,6 @@ export default function Minimap({
           </svg>
         </button>
 
-        {/* % reset button */}
         <button
           onClick={e => { e.stopPropagation(); onZoomReset(); }}
           title="Reset to 100% (Ctrl 0)"
@@ -373,7 +432,6 @@ export default function Minimap({
           {pct}%
         </button>
 
-        {/* Zoom in */}
         <button
           onClick={e => { e.stopPropagation(); onZoomIn(); }}
           disabled={scale >= 4}
