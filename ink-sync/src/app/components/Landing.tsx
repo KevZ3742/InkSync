@@ -43,7 +43,7 @@ export default function Landing({ onJoin }: LandingProps) {
         }
       `}</style>
       <img
-        src="/background_dark.png"
+        src="/background_light.png"
         alt=""
         aria-hidden="true"
         style={{
