@@ -1,15 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
 export async function POST(req: Request) {
   const { audio, mimeType } = await req.json();
 
-  if (!audio) {
-    return new Response('Missing audio', { status: 400 });
-  }
+  if (!audio) return new Response('Missing audio', { status: 400 });
 
-  // Mock mode
   if (process.env.MOCK_AI === 'true') {
     await new Promise(r => setTimeout(r, 400));
     return new Response(JSON.stringify({ text: 'a simple flowchart with three steps' }), {
@@ -18,23 +11,30 @@ export async function POST(req: Request) {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const binary = Buffer.from(audio, 'base64');
+    const blob = new Blob([binary], { type: mimeType ?? 'audio/webm' });
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: mimeType ?? 'audio/webm',
-          data: audio,
-        },
+    const formData = new FormData();
+    formData.append('file', blob, `audio.${mimeType?.split('/')[1] ?? 'webm'}`);
+    formData.append('model', 'whisper-large-v3-turbo');
+    formData.append('response_format', 'json');
+
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
       },
-      {
-        text: 'Transcribe exactly what is spoken in this audio clip. Return only the transcribed text, nothing else — no punctuation fixes, no commentary, no quotes.',
-      },
-    ]);
+      body: formData,
+    });
 
-    const text = result.response.text().trim();
+    if (!response.ok) {
+      const err = await response.text();
+      console.error('Groq Whisper error:', err);
+      throw new Error(`Groq returned ${response.status}`);
+    }
 
-    return new Response(JSON.stringify({ text }), {
+    const result = await response.json();
+    return new Response(JSON.stringify({ text: result.text?.trim() ?? '' }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
